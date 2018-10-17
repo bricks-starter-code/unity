@@ -37,13 +37,14 @@ Shader "bricksseeds/NormalShader"
 			{
 				v2f o;
 				o.vertex = UnityObjectToClipPos(v.vertex);
-				o.normal = v.normal * .5 + fixed3(.5, .5, .5);
+				o.normal = v.normal;
 				return o;
 			}
 			
 			fixed4 frag (v2f i) : SV_Target
 			{
-				return fixed4(i.normal, 1);
+				fixed3 colorNormal = i.normal *.5 + fixed3(.5, .5, .5);
+				return fixed4(colorNormal, 1);
 			}
 			ENDCG
 		}
