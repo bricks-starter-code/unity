@@ -1,4 +1,4 @@
-Shader "bricksseeds/rollingTrig"
+Shader "bricksseeds/NormalsOnGPU"
 {
 	Properties
 	{
