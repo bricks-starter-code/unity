@@ -1,82 +1,74 @@
-Shader "bricksseeds/NormalsOnGPU"
-{
-	Properties
-	{
-		
-	}
-		SubShader
-	{
-		Tags { "RenderType" = "Opaque" }
-		LOD 100
+Shader "bricksseeds/normalsOnGPU" {
+//Updated to work in the normal Unity lighting pipeline
+        Properties {
+            _MainTex ("Base (RGB)", 2D) = "white" {}
+            _DispTex ("Disp Texture", 2D) = "gray" {}
+            _NormalMap ("Normalmap", 2D) = "bump" {}
+            _Displacement ("Displacement", Range(0, 1.0)) = 0.3
+            _Color ("Color", color) = (1,1,1,0)
+            _SpecColor ("Spec color", color) = (0.5,0.5,0.5,0.5)
+        }
+        SubShader {
+            Tags { "RenderType"="Opaque" }
+            LOD 300
+            
+            CGPROGRAM
+            #pragma surface surf BlinnPhong addshadow fullforwardshadows vertex:disp nolightmap
+            #pragma target 4.6
 
-		Pass
-		{
-			CGPROGRAM
-			#pragma vertex vert
-			#pragma fragment frag
-			
-			#include "UnityCG.cginc"
+            struct appdata {
+                float4 vertex : POSITION;
+                float4 tangent : TANGENT;
+                float3 normal : NORMAL;
+                float2 texcoord : TEXCOORD0;
+            };
 
-			struct appdata
-			{
-				float4 vertex : POSITION;
-				float3 normal : NORMAL;				
-			};
+						//#include "ClassicNoise3D.HLSL"
 
-			struct v2f
-			{
-				float4 vertex : SV_POSITION;
-				float3 normal: NORMAL;
-				float3 objectSpacePosition : TEXCOORD0;
-			};
+            sampler2D _DispTex;
+            float _Displacement;
 
-			
-			float height(fixed2 xy) {
-				return (sin(xy.x * 8 ) + cos(xy.y * 8) )* .25;
-			}
+						float height(float3 xyz) {
+							//return cnoise(xyz);
+							return (sin(xyz.x*5) + cos(xyz.z*5))/2;
+						}
 
-			v2f vert(appdata v)
-			{
-				v2f o;
-				fixed3 modelSpace = v.vertex;
-				fixed2 P = fixed2(modelSpace.x, modelSpace.z);
-				float newY = height(P);
-				fixed3 altered = fixed3(P.x, newY, P.y);
-				o.vertex = UnityObjectToClipPos(altered);
-				o.objectSpacePosition = altered;			
+            void disp (inout appdata v)
+            {
+                float3 start = v.vertex.xyz;
+                v.vertex.y = height(v.vertex);
+								float3 altered = v.vertex.xyz;
 
+								float3 offset1 = float3(1,0,0) * .01;
+								float3 offset2 = float3(0,0,1) * .01;
+								float3 ms1 = start + offset1;
+								float3 ms2 = start + offset2;
+								float height1 = height(ms1);
+								float height2 = height(ms2);
+								float3 P1 = float3(ms1.x, height1, ms1.z);
+								float3 P2 = float3(ms2.x, height2, ms2.z);
+								float3 tangent1 = normalize(P1 - altered);
+								float3 tangent2 = normalize(P2 - altered);
+								float3 newNormal = cross(tangent2, tangent1);
+								v.normal = normalize(newNormal);
+            }
 
+            struct Input {
+                float2 uv_MainTex;
+            };
 
-				//calculate the normal
-				fixed2 offset1 = fixed2(1,0) * .01;
-				fixed2 offset2 = fixed2(0,1) * .01;
-				fixed2 ms1 = P + offset1;
-				fixed2 ms2 = P + offset2;
-				float height1 = height(ms1);
-				float height2 = height(ms2);
-				fixed3 P1 = fixed3(ms1.x, height1, ms1.y);
-				fixed3 P2 = fixed3(ms2.x, height2, ms2.y);
-				fixed3 tangent1 = normalize(P1 - altered);
-				fixed3 tangent2 = normalize(P2 - altered);
-				fixed3 newNormal = cross(tangent2, tangent1);
-				o.normal = normalize(newNormal);
-				return o;
-			}
+            sampler2D _MainTex;
+            sampler2D _NormalMap;
+            fixed4 _Color;
 
-			fixed4 frag(v2f i) : SV_Target
-			{
-				fixed3 objectSpaceColor = frac(abs(i.objectSpacePosition));
-				fixed3 normalColor = i.normal * .5 + fixed3(.5, .5, .5);
-
-				float d = dot(normalize(half3(0, 1, 0)), i.normal);
-				float3 simpleLightingColor = fixed3(1, 0, 0) * d;
-
-
-				fixed4 final = fixed4(simpleLightingColor, 1);//Or for debugging use normalColor, objectSpaceColor
-				return final;
-			
-			}
-			ENDCG
-		}
-	}
-}
+            void surf (Input IN, inout SurfaceOutput o) {
+                half4 c = tex2D (_MainTex, IN.uv_MainTex) * _Color;
+                o.Albedo = c.rgb;
+                o.Specular = 0.2;
+                o.Gloss = 1.0;
+                o.Normal = UnpackNormal(tex2D(_NormalMap, IN.uv_MainTex));
+            }
+            ENDCG
+        }
+        FallBack "Diffuse"
+    }
